@@ -1,35 +1,5 @@
 package org.embulk.output.azure_blob_storage;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.microsoft.azure.storage.blob.CloudBlob;
-import com.microsoft.azure.storage.blob.CloudBlobClient;
-import com.microsoft.azure.storage.blob.CloudBlobContainer;
-import com.microsoft.azure.storage.blob.CloudBlockBlob;
-import com.microsoft.azure.storage.StorageException;
-import org.embulk.EmbulkTestRuntime;
-import org.embulk.config.ConfigDiff;
-import org.embulk.config.ConfigSource;
-import org.embulk.config.TaskReport;
-import org.embulk.config.TaskSource;
-import org.embulk.spi.Buffer;
-import org.embulk.spi.Exec;
-import org.embulk.spi.FileOutputPlugin;
-import org.embulk.spi.FileOutputRunner;
-import org.embulk.output.azure_blob_storage.AzureBlobStorageFileOutputPlugin.PluginTask;
-
-import org.embulk.spi.OutputPlugin;
-import org.embulk.spi.Schema;
-import org.embulk.spi.TransactionalFileOutput;
-import org.embulk.standards.CsvParserPlugin;
-import org.junit.BeforeClass;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assume.assumeNotNull;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
@@ -40,6 +10,36 @@ import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.List;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+
+import org.embulk.EmbulkTestRuntime;
+import org.embulk.config.ConfigDiff;
+import org.embulk.config.ConfigSource;
+import org.embulk.config.TaskReport;
+import org.embulk.config.TaskSource;
+import org.embulk.spi.Buffer;
+import org.embulk.spi.Exec;
+import org.embulk.spi.Schema;
+import org.embulk.spi.OutputPlugin;
+import org.embulk.spi.FileOutputRunner;
+import org.embulk.spi.FileOutputPlugin;
+import org.embulk.spi.TransactionalFileOutput;
+import org.embulk.standards.CsvParserPlugin;
+
+import org.junit.BeforeClass;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assume.assumeNotNull;
+
+import com.microsoft.azure.storage.blob.CloudBlob;
+import com.microsoft.azure.storage.blob.CloudBlobClient;
+import com.microsoft.azure.storage.blob.CloudBlobContainer;
+import org.embulk.output.azure_blob_storage.AzureBlobStorageFileOutputPlugin.PluginTask;
 
 public class TestAzureBlobStorageFileOutputPlugin
 {
