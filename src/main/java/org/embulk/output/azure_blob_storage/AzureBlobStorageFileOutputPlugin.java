@@ -53,24 +53,22 @@ public class AzureBlobStorageFileOutputPlugin
     }
 
     private static final Logger log = Exec.getLogger(AzureBlobStorageFileOutputPlugin.class);
-    private static CloudBlobClient blobClient;
-    private static CloudBlobContainer container;
 
     @Override
     public ConfigDiff transaction(ConfigSource config, int taskCount,
             FileOutputPlugin.Control control)
     {
         PluginTask task = config.loadConfig(PluginTask.class);
-        blobClient = newAzureClient(task.getAccountName(), task.getAccountKey());
-        String containerName = task.getContainer();
 
         try {
-            container = blobClient.getContainerReference(containerName);
+            CloudBlobClient blobClient = newAzureClient(task.getAccountName(), task.getAccountKey());
+            String containerName = task.getContainer();
+            CloudBlobContainer container = blobClient.getContainerReference(containerName);
             if (!container.exists()) {
                 log.info(String.format("container [%s] is not exists and created.", containerName));
                 container.createIfNotExists();
             }
-        } catch (StorageException | URISyntaxException ex) {
+        } catch (StorageException | URISyntaxException | ConfigException ex) {
             Throwables.propagate(ex);
         }
 
@@ -106,94 +104,118 @@ public class AzureBlobStorageFileOutputPlugin
     }
 
     @Override
-    public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex)
-    {
+    public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex) {
         final PluginTask task = taskSource.loadTask(PluginTask.class);
+        return new AzureFileOutput(task, taskIndex);
+    }
 
-        final String pathPrefix = task.getPathPrefix();
-        final String sequenceFormat = task.getSequenceFormat();
-        final String pathSuffix = task.getFileNameExtension();
+    public static class AzureFileOutput implements TransactionalFileOutput
+    {
+        private final String pathPrefix;
+        private final String sequenceFormat;
+        private final String pathSuffix;
+        private final CloudBlobClient client;
+        private CloudBlobContainer container = null;
+        private BufferedOutputStream output = null;
+        private int fileIndex;
+        private File file;
+        private String filePath;
+        private int taskIndex;
 
-        return new TransactionalFileOutput() {
-            private int fileIndex = 0;
-            private BufferedOutputStream output = null;
-            private File file;
-            private String filePath;
-
-            public void nextFile()
-            {
-                closeFile();
-
-                try {
-                    String suffix = pathSuffix;
-                    if (!suffix.startsWith(".")) {
-                        suffix = "." + suffix;
-                    }
-                    filePath = pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
-                    file = new File(filePath);
-
-                    String parentPath = file.getParent();
-                    File dir = new File(parentPath);
-                    if (!dir.exists()) {
-                        dir.mkdir();
-                    }
-                    log.info(String.format("Writing local file [%s]", filePath));
-                    output = new BufferedOutputStream(new FileOutputStream(filePath));
-                } catch (FileNotFoundException ex) {
-                    throw Throwables.propagate(ex);
-                }
+        public AzureFileOutput(PluginTask task, int taskIndex)
+        {
+            this.taskIndex = taskIndex;
+            this.pathPrefix = task.getPathPrefix();
+            this.sequenceFormat = task.getSequenceFormat();
+            this.pathSuffix = task.getFileNameExtension();
+            this.client = newAzureClient(task.getAccountName(), task.getAccountKey());
+            try {
+                this.container = client.getContainerReference(task.getContainer());
+            } catch (URISyntaxException | StorageException ex) {
+                Throwables.propagate(ex);
             }
+        }
 
-            private void closeFile()
-            {
-                if (output != null) {
-                    try {
-                        output.close();
-                    } catch (IOException ex) {
-                        throw Throwables.propagate(ex);
-                    }
+        @Override
+        public void nextFile()
+        {
+            closeFile();
+
+            try {
+                String suffix = pathSuffix;
+                if (!suffix.startsWith(".")) {
+                    suffix = "." + suffix;
                 }
-            }
+                filePath = pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
+                file = new File(filePath);
 
-            public void add(Buffer buffer)
-            {
+                String parentPath = file.getParent();
+                File dir = new File(parentPath);
+                if (!dir.exists()) {
+                    dir.mkdir();
+                }
+                log.info(String.format("Writing local file [%s]", filePath));
+                output = new BufferedOutputStream(new FileOutputStream(filePath));
+            } catch (FileNotFoundException ex) {
+                throw Throwables.propagate(ex);
+            }
+        }
+
+        private void closeFile()
+        {
+            if (output != null) {
                 try {
-                    output.write(buffer.array(), buffer.offset(), buffer.limit());
+                    output.close();
+                    fileIndex++;
                 } catch (IOException ex) {
                     throw Throwables.propagate(ex);
-                } finally {
-                    buffer.release();
                 }
             }
+        }
 
-            public void finish()
-            {
-                closeFile();
-                if (filePath != null) {
-                    try {
-                        CloudBlockBlob blob = container.getBlockBlobReference(filePath);
-                        log.info(String.format("Upload start [%s]", filePath));
-                        blob.upload(new FileInputStream(file), file.length());
-                        log.info(String.format("Upload completed [%s]", filePath));
-                        file.delete();
-                        log.info(String.format("Delete completed local file [%s]", filePath));
-                    } catch (StorageException | URISyntaxException | IOException ex) {
-                        Throwables.propagate(ex);
-                    }
+        @Override
+        public void add(Buffer buffer)
+        {
+            try {
+                output.write(buffer.array(), buffer.offset(), buffer.limit());
+            } catch (IOException ex) {
+                throw Throwables.propagate(ex);
+            } finally {
+                buffer.release();
+            }
+        }
+
+        @Override
+        public void finish()
+        {
+            closeFile();
+            if (filePath != null) {
+                try {
+                    CloudBlockBlob blob = container.getBlockBlobReference(filePath);
+                    log.info(String.format("Upload start [%s]", filePath));
+                    blob.upload(new FileInputStream(file), file.length());
+                    log.info(String.format("Upload completed [%s]", filePath));
+                    file.delete();
+                    log.info(String.format("Delete completed local file [%s]", filePath));
+                } catch (StorageException | URISyntaxException | IOException ex) {
+                    Throwables.propagate(ex);
                 }
             }
+        }
 
-            public void close()
-            {
-                closeFile();
-            }
+        @Override
+        public void close()
+        {
+            closeFile();
+        }
 
-            public void abort() {}
+        @Override
+        public void abort() {}
 
-            public TaskReport commit()
-            {
-                return Exec.newTaskReport();
-            }
-        };
+        @Override
+        public TaskReport commit()
+        {
+            return Exec.newTaskReport();
+        }
     }
 }
