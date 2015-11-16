@@ -1,7 +1,7 @@
 
 Gem::Specification.new do |spec|
   spec.name          = "embulk-output-azure_blob_storage"
-  spec.version       = "0.1.0"
+  spec.version       = "0.1.1"
   spec.authors       = ["Satoshi Akama"]
   spec.summary       = %[Microsoft Azure blob Storage file output plugin for Embulk]
   spec.description   = %[Stores files on Microsoft Azure blob Storage.]
