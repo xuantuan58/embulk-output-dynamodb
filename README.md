@@ -60,10 +60,6 @@ $ ./gradlew test  # -t to watch change of files and rebuild continuously
 
 To run unit tests, we need to configure the following environment variables.
 
-Additionally, following files will be needed to upload to existing GCS bucket.
-* [sample_01.csv](./src/test/resources/sample_01.csv)
-* [sample_02.csv](./src/test/resources/sample_02.csv)
-
 When environment variables are not set, skip some test cases.
 
 ```
