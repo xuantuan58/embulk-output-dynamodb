@@ -1,30 +1,36 @@
 package org.embulk.output.azure_blob_storage;
 
-import java.io.File;
+import com.google.common.base.Throwables;
+import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.CloudBlobClient;
+import com.microsoft.azure.storage.blob.CloudBlobContainer;
+import com.microsoft.azure.storage.blob.CloudBlockBlob;
+import org.embulk.config.Config;
+import org.embulk.config.ConfigDefault;
+import org.embulk.config.ConfigDiff;
+import org.embulk.config.ConfigException;
+import org.embulk.config.ConfigSource;
+import org.embulk.config.Task;
+import org.embulk.config.TaskReport;
+import org.embulk.config.TaskSource;
+import org.embulk.spi.Buffer;
+import org.embulk.spi.Exec;
+import org.embulk.spi.FileOutputPlugin;
+import org.embulk.spi.TransactionalFileOutput;
+
+import org.slf4j.Logger;
+
 import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.security.InvalidKeyException;
 import java.util.List;
-import com.google.common.base.Throwables;
-import org.embulk.config.Config;
-import org.embulk.config.ConfigException;
-import org.embulk.config.ConfigDefault;
-import org.embulk.config.ConfigSource;
-import org.embulk.config.ConfigDiff;
-import org.embulk.config.TaskReport;
-import org.embulk.config.Task;
-import org.embulk.config.TaskSource;
-import org.embulk.spi.Exec;
-import org.embulk.spi.FileOutputPlugin;
-import org.embulk.spi.TransactionalFileOutput;
-import org.embulk.spi.Buffer;
-import com.microsoft.azure.storage.*;
-import com.microsoft.azure.storage.blob.*;
-import org.slf4j.Logger;
 
 public class AzureBlobStorageFileOutputPlugin
         implements FileOutputPlugin
@@ -68,7 +74,8 @@ public class AzureBlobStorageFileOutputPlugin
                 log.info(String.format("container [%s] is not exists and created.", containerName));
                 container.createIfNotExists();
             }
-        } catch (StorageException | URISyntaxException | ConfigException ex) {
+        }
+        catch (StorageException | URISyntaxException | ConfigException ex) {
             Throwables.propagate(ex);
         }
 
@@ -97,14 +104,16 @@ public class AzureBlobStorageFileOutputPlugin
         CloudStorageAccount account;
         try {
             account = CloudStorageAccount.parse(connectionString);
-        } catch (InvalidKeyException | URISyntaxException ex) {
+        }
+        catch (InvalidKeyException | URISyntaxException ex) {
             throw new ConfigException(ex.getMessage());
         }
         return account.createCloudBlobClient();
     }
 
     @Override
-    public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex) {
+    public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex)
+    {
         final PluginTask task = taskSource.loadTask(PluginTask.class);
         return new AzureFileOutput(task, taskIndex);
     }
@@ -131,7 +140,8 @@ public class AzureBlobStorageFileOutputPlugin
             this.client = newAzureClient(task.getAccountName(), task.getAccountKey());
             try {
                 this.container = client.getContainerReference(task.getContainer());
-            } catch (URISyntaxException | StorageException ex) {
+            }
+            catch (URISyntaxException | StorageException ex) {
                 Throwables.propagate(ex);
             }
         }
@@ -156,7 +166,8 @@ public class AzureBlobStorageFileOutputPlugin
                 }
                 log.info(String.format("Writing local file [%s]", filePath));
                 output = new BufferedOutputStream(new FileOutputStream(filePath));
-            } catch (FileNotFoundException ex) {
+            }
+            catch (FileNotFoundException ex) {
                 throw Throwables.propagate(ex);
             }
         }
@@ -167,7 +178,8 @@ public class AzureBlobStorageFileOutputPlugin
                 try {
                     output.close();
                     fileIndex++;
-                } catch (IOException ex) {
+                }
+                catch (IOException ex) {
                     throw Throwables.propagate(ex);
                 }
             }
@@ -178,9 +190,11 @@ public class AzureBlobStorageFileOutputPlugin
         {
             try {
                 output.write(buffer.array(), buffer.offset(), buffer.limit());
-            } catch (IOException ex) {
+            }
+            catch (IOException ex) {
                 throw Throwables.propagate(ex);
-            } finally {
+            }
+            finally {
                 buffer.release();
             }
         }
@@ -197,7 +211,8 @@ public class AzureBlobStorageFileOutputPlugin
                     log.info(String.format("Upload completed [%s]", filePath));
                     file.delete();
                     log.info(String.format("Delete completed local file [%s]", filePath));
-                } catch (StorageException | URISyntaxException | IOException ex) {
+                }
+                catch (StorageException | URISyntaxException | IOException ex) {
                     Throwables.propagate(ex);
                 }
             }
