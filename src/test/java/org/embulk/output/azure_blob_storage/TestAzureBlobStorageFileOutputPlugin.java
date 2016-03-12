@@ -3,6 +3,7 @@ package org.embulk.output.azure_blob_storage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.io.Resources;
 import com.microsoft.azure.storage.blob.CloudBlob;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
@@ -67,7 +68,7 @@ public class TestAzureBlobStorageFileOutputPlugin
 
         AZURE_CONTAINER_DIRECTORY = System.getenv("AZURE_CONTAINER_DIRECTORY") != null ? getDirectory(System.getenv("AZURE_CONTAINER_DIRECTORY")) : getDirectory("");
         AZURE_PATH_PREFIX = AZURE_CONTAINER_DIRECTORY + "sample_";
-        LOCAL_PATH_PREFIX = AzureBlobStorageFileOutputPlugin.class.getClassLoader().getResource("sample_01.csv").getPath();
+        LOCAL_PATH_PREFIX = Resources.getResource("sample_01.csv").getPath();
     }
 
     @Rule
@@ -96,7 +97,7 @@ public class TestAzureBlobStorageFileOutputPlugin
                 .set("formatter", formatterConfig());
 
         PluginTask task = config.loadConfig(PluginTask.class);
-        assertEquals(AZURE_ACCOUNT_NAME, task.getAccountName().toString());
+        assertEquals(AZURE_ACCOUNT_NAME, task.getAccountName());
     }
 
     @Test
@@ -348,11 +349,7 @@ public class TestAzureBlobStorageFileOutputPlugin
         method.setAccessible(true);
         CloudBlobClient client = (CloudBlobClient) method.invoke(plugin, AZURE_ACCOUNT_NAME, AZURE_ACCOUNT_KEY);
         CloudBlobContainer container = client.getContainerReference(containerName);
-        if (container.exists()) {
-            return true;
-        }
-
-        return false;
+        return container.exists();
     }
 
     private void deleteContainerIfExists(String containerName) throws Exception
@@ -370,7 +367,7 @@ public class TestAzureBlobStorageFileOutputPlugin
 
     private static String getDirectory(String dir)
     {
-        if (dir != null && !dir.endsWith("/")) {
+        if (!dir.isEmpty() && !dir.endsWith("/")) {
             dir = dir + "/";
         }
         if (dir.startsWith("/")) {
