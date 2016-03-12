@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 
 import java.io.IOException;
@@ -71,7 +70,7 @@ public class AzureBlobStorageFileOutputPlugin
             String containerName = task.getContainer();
             CloudBlobContainer container = blobClient.getContainerReference(containerName);
             if (!container.exists()) {
-                log.info(String.format("container [%s] is not exists and created.", containerName));
+                log.info("container {} doesn't exists and created.", containerName);
                 container.createIfNotExists();
             }
         }
@@ -157,17 +156,11 @@ public class AzureBlobStorageFileOutputPlugin
                     suffix = "." + suffix;
                 }
                 filePath = pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
-                file = new File(filePath);
-
-                String parentPath = file.getParent();
-                File dir = new File(parentPath);
-                if (!dir.exists()) {
-                    dir.mkdir();
-                }
-                log.info(String.format("Writing local file [%s]", filePath));
-                output = new BufferedOutputStream(new FileOutputStream(filePath));
+                file = File.createTempFile(filePath, ".tmp");
+                log.info("Writing local file {}", file.getAbsolutePath());
+                output = new BufferedOutputStream(new FileOutputStream(file));
             }
-            catch (FileNotFoundException ex) {
+            catch (IOException ex) {
                 throw Throwables.propagate(ex);
             }
         }
@@ -206,11 +199,13 @@ public class AzureBlobStorageFileOutputPlugin
             if (filePath != null) {
                 try {
                     CloudBlockBlob blob = container.getBlockBlobReference(filePath);
-                    log.info(String.format("Upload start [%s]", filePath));
+                    log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
                     blob.upload(new FileInputStream(file), file.length());
-                    log.info(String.format("Upload completed [%s]", filePath));
-                    file.delete();
-                    log.info(String.format("Delete completed local file [%s]", filePath));
+                    log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
+                    if (!file.delete()) {
+                        throw new IOException("Couldn't delete file " + file.getAbsolutePath());
+                    }
+                    log.info("Delete completed local file {}", file.getAbsolutePath());
                 }
                 catch (StorageException | URISyntaxException | IOException ex) {
                     Throwables.propagate(ex);
