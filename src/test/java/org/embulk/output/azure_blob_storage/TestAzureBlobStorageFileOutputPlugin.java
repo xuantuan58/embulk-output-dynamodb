@@ -268,6 +268,7 @@ public class TestAzureBlobStorageFileOutputPlugin
         builder.add(ImmutableMap.of("name", "time", "type", "timestamp", "format", "%Y-%m-%d %H:%M:%S"));
         builder.add(ImmutableMap.of("name", "purchase", "type", "timestamp", "format", "%Y%m%d"));
         builder.add(ImmutableMap.of("name", "comment", "type", "string"));
+        builder.add(ImmutableMap.of("name", "json_column", "type", "json"));
         return builder.build();
     }
 
@@ -283,7 +284,7 @@ public class TestAzureBlobStorageFileOutputPlugin
     private void assertRecords(String azurePath) throws Exception
     {
         ImmutableList<List<String>> records = getFileContentsFromAzure(azurePath);
-        assertEquals(5, records.size());
+        assertEquals(6, records.size());
         {
             List<String> record = records.get(1);
             assertEquals("1", record.get(0));
@@ -291,6 +292,7 @@ public class TestAzureBlobStorageFileOutputPlugin
             assertEquals("2015-01-27 19:23:49", record.get(2));
             assertEquals("20150127", record.get(3));
             assertEquals("embulk", record.get(4));
+            assertEquals("{\"k\":true}", record.get(5));
         }
 
         {
@@ -300,6 +302,22 @@ public class TestAzureBlobStorageFileOutputPlugin
             assertEquals("2015-01-27 19:01:23", record.get(2));
             assertEquals("20150127", record.get(3));
             assertEquals("embulk jruby", record.get(4));
+            assertEquals("{\"k\":1}", record.get(5));
+        }
+
+        {
+            List<String> record = records.get(3);
+            assertEquals("{\"k\":1.23}", record.get(5));
+        }
+
+        {
+            List<String> record = records.get(4);
+            assertEquals("{\"k\":\"v\"}", record.get(5));
+        }
+
+        {
+            List<String> record = records.get(5);
+            assertEquals("{\"k\":\"2015-02-03 08:13:45\"}", record.get(5));
         }
     }
 
