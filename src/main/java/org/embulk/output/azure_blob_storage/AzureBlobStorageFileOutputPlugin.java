@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 
 import java.io.IOException;
@@ -55,6 +56,10 @@ public class AzureBlobStorageFileOutputPlugin
         @Config("sequence_format")
         @ConfigDefault("\"%03d.%02d\"")
         String getSequenceFormat();
+
+        @Config("max_connection_retry")
+        @ConfigDefault("5") // 5 times retry to connect sftp server if failed.
+        int getMaxConnectionRetry();
     }
 
     private static final Logger log = Exec.getLogger(AzureBlobStorageFileOutputPlugin.class);
@@ -123,6 +128,7 @@ public class AzureBlobStorageFileOutputPlugin
         private final String sequenceFormat;
         private final String pathSuffix;
         private final CloudBlobClient client;
+        private final int maxConnectionRetry;
         private CloudBlobContainer container = null;
         private BufferedOutputStream output = null;
         private int fileIndex;
@@ -137,6 +143,7 @@ public class AzureBlobStorageFileOutputPlugin
             this.sequenceFormat = task.getSequenceFormat();
             this.pathSuffix = task.getFileNameExtension();
             this.client = newAzureClient(task.getAccountName(), task.getAccountKey());
+            this.maxConnectionRetry = task.getMaxConnectionRetry();
             try {
                 this.container = client.getContainerReference(task.getContainer());
             }
@@ -195,20 +202,47 @@ public class AzureBlobStorageFileOutputPlugin
         @Override
         public void finish()
         {
-            closeFile();
+            close();
+            try {
+                Thread.sleep(1000 * 10);
+            }
+            catch (Exception ex) {
+                // null;
+            }
             if (filePath != null) {
-                try {
-                    CloudBlockBlob blob = container.getBlockBlobReference(filePath);
-                    log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
-                    blob.upload(new FileInputStream(file), file.length());
-                    log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
-                    if (!file.delete()) {
-                        throw new IOException("Couldn't delete file " + file.getAbsolutePath());
+                int count = 0;
+                while (true) {
+                    try {
+                        CloudBlockBlob blob = container.getBlockBlobReference(filePath);
+                        log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
+                        blob.upload(new FileInputStream(file), file.length());
+                        log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
+                        log.info("Delete completed local file {}", file.getAbsolutePath());
+                        if (!file.delete()) {
+                            throw new ConfigException("Couldn't delete local file " + file.getAbsolutePath());
+                        }
+                        break;
                     }
-                    log.info("Delete completed local file {}", file.getAbsolutePath());
-                }
-                catch (StorageException | URISyntaxException | IOException ex) {
-                    Throwables.propagate(ex);
+                    catch (FileNotFoundException | URISyntaxException ex) {
+                        throw new ConfigException(ex);
+                    }
+                    catch (StorageException | IOException ex) {
+                        if (++count == maxConnectionRetry) {
+                            Throwables.propagate(ex);
+                        }
+                        log.warn("failed to connect SFTP server: " + ex.getMessage(), ex);
+
+                        try {
+                            long sleepTime = ((long) Math.pow(2, count) * 1000);
+                            log.warn("sleep in next connection retry: {} milliseconds", sleepTime);
+                            Thread.sleep(sleepTime); // milliseconds
+                        }
+                        catch (InterruptedException ex2) {
+                            // Ignore this exception because this exception is just about `sleep`.
+                            log.warn(ex2.getMessage(), ex2);
+                        }
+                        log.warn("retrying to connect SFTP server: " + count + " times");
+                    }
                 }
             }
         }
