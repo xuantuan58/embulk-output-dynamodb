@@ -9,6 +9,7 @@ import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import org.embulk.EmbulkTestRuntime;
 import org.embulk.config.ConfigDiff;
+import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
 import org.embulk.config.TaskReport;
 import org.embulk.config.TaskSource;
@@ -31,10 +32,12 @@ import static org.junit.Assume.assumeNotNull;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
@@ -209,6 +212,64 @@ public class TestAzureBlobStorageFileOutputPlugin
 
         String remotePath = AZURE_PATH_PREFIX + String.format(task.getSequenceFormat(), 0, 0) + task.getFileNameExtension();
         assertRecords(remotePath);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testAzureFileOutputByOpenWithNonReadableFile() throws Exception
+    {
+        ConfigSource configSource = config();
+        PluginTask task = configSource.loadConfig(PluginTask.class);
+        Schema schema = configSource.getNested("parser").loadConfig(CsvParserPlugin.PluginTask.class).getSchemaConfig().toSchema();
+        runner.transaction(configSource, schema, 0, new Control());
+
+        TransactionalFileOutput output = plugin.open(task.dump(), 0);
+
+        output.nextFile();
+
+        FileInputStream is = new FileInputStream(LOCAL_PATH_PREFIX);
+        byte[] bytes = convertInputStreamToByte(is);
+        Buffer buffer = Buffer.wrap(bytes);
+        output.add(buffer);
+
+        Field field = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("file");
+        field.setAccessible(true);
+        File file = File.createTempFile("non-readable-file", ".tmp");
+        file.setReadable(false);
+        field.set(output, file);
+        output.finish();
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testAzureFileOutputByOpenWithRetry() throws Exception
+    {
+        ConfigSource configSource = config();
+        PluginTask task = configSource.loadConfig(PluginTask.class);
+        Schema schema = configSource.getNested("parser").loadConfig(CsvParserPlugin.PluginTask.class).getSchemaConfig().toSchema();
+        runner.transaction(configSource, schema, 0, new Control());
+
+        TransactionalFileOutput output = plugin.open(task.dump(), 0);
+
+        output.nextFile();
+
+        FileInputStream is = new FileInputStream(LOCAL_PATH_PREFIX);
+        byte[] bytes = convertInputStreamToByte(is);
+        Buffer buffer = Buffer.wrap(bytes);
+        output.add(buffer);
+
+        // set maxConnectionRetry = 1 for Test
+        Field maxConnectionRetry = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("maxConnectionRetry");
+        maxConnectionRetry.setAccessible(true);
+        maxConnectionRetry.set(output, 1);
+
+        // set non-existing-container for Test
+        Method method = AzureBlobStorageFileOutputPlugin.class.getDeclaredMethod("newAzureClient", String.class, String.class);
+        method.setAccessible(true);
+        CloudBlobClient client = (CloudBlobClient) method.invoke(plugin, AZURE_ACCOUNT_NAME, AZURE_ACCOUNT_KEY);
+
+        Field container = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("container");
+        container.setAccessible(true);
+        container.set(output, client.getContainerReference("non-exists-container"));
+        output.finish();
     }
 
     public ConfigSource config()
