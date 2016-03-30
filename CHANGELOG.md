@@ -1,3 +1,7 @@
+## 0.1.4 - 2015-03-20
+
+* [maintenance] Use RetryExecutor when retry is needed [#7](https://github.com/sakama/embulk-output-azure_blob_storage/pull/7)
+
 ## 0.1.3 - 2015-03-15
 
 * [maintenance] Add retry logic using expotential backoff [#6](https://github.com/sakama/embulk-output-azure_blob_storage/pull/6)
