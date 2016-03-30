@@ -1,6 +1,6 @@
-# Azure blob Storage file output plugin for Embulk
+# Azure Blob Storage file output plugin for Embulk
 
-[Embulk](http://www.embulk.org/) file output plugin stores files on [Microsoft Azure](https://azure.microsoft.com/) [blob Storage](https://azure.microsoft.com/en-us/documentation/articles/storage-introduction/#blob-storage)
+[Embulk](http://www.embulk.org/) file output plugin stores files on [Microsoft Azure](https://azure.microsoft.com/) [Blob Storage](https://azure.microsoft.com/en-us/documentation/articles/storage-introduction/#blob-storage)
 
 
 ## Overview
@@ -22,10 +22,10 @@ First, create Azure [Storage Account](https://azure.microsoft.com/en-us/document
 
 ### Auto create container
 
-container will create automatically when container isn't exists.
+container will create automatically when container doesn't exists.
  
-When a container is deleted, a container with the same name cannot be created for at least 30 seconds.
-It's a [service specification](https://technet.microsoft.com/en-us/library/dd179408.aspx#Anchor_3) of Azure blob Storage.
+When a container was deleted, a container with same name cannot be created for at least 30 seconds.
+It's a [service specification](https://technet.microsoft.com/en-us/library/dd179408.aspx#Anchor_3) of Azure Blob Storage.
 
 ## Example
 
