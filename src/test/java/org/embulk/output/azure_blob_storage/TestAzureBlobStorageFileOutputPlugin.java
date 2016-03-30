@@ -9,7 +9,6 @@ import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import org.embulk.EmbulkTestRuntime;
 import org.embulk.config.ConfigDiff;
-import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
 import org.embulk.config.TaskReport;
 import org.embulk.config.TaskSource;
@@ -34,6 +33,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -100,7 +100,11 @@ public class TestAzureBlobStorageFileOutputPlugin
                 .set("formatter", formatterConfig());
 
         PluginTask task = config.loadConfig(PluginTask.class);
+
         assertEquals(AZURE_ACCOUNT_NAME, task.getAccountName());
+        assertEquals(AZURE_ACCOUNT_KEY, task.getAccountKey());
+        assertEquals(AZURE_CONTAINER, task.getContainer());
+        assertEquals(10, task.getMaxConnectionRetry());
     }
 
     @Test
@@ -214,7 +218,7 @@ public class TestAzureBlobStorageFileOutputPlugin
         assertRecords(remotePath);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testAzureFileOutputByOpenWithNonReadableFile() throws Exception
     {
         ConfigSource configSource = config();
@@ -236,7 +240,12 @@ public class TestAzureBlobStorageFileOutputPlugin
         File file = File.createTempFile("non-readable-file", ".tmp");
         file.setReadable(false);
         field.set(output, file);
-        output.finish();
+        try {
+            output.finish();
+        }
+        catch (Exception ex) {
+            assertEquals(FileNotFoundException.class, ex.getCause().getClass());
+        }
     }
 
     @Test(expected = RuntimeException.class)
