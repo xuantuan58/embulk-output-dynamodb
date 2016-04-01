@@ -82,7 +82,7 @@ public class AzureBlobStorageFileOutputPlugin
             }
         }
         catch (StorageException | URISyntaxException | ConfigException ex) {
-            Throwables.propagate(ex);
+            throw new ConfigException(ex);
         }
 
         return resume(task.dump(), taskCount, control);
