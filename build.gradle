@@ -69,7 +69,7 @@ Gem::Specification.new do |spec|
   spec.description   = %[Stores files on Microsoft Azure Blob Storage.]
   spec.email         = ["satoshiakama@gmail.com"]
   spec.licenses      = ["Apache-2.0"]
-  spec.homepage      = "https://github.com/sakama/embulk-output-azure_blob_storage"
+  spec.homepage      = "https://github.com/embulk/embulk-output-azure_blob_storage"
 
   spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"]
   spec.test_files    = spec.files.grep(%r"^(test|spec)/")
