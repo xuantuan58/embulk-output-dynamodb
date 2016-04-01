@@ -23,6 +23,7 @@ import org.embulk.spi.util.RetryExecutor.Retryable;
 import org.slf4j.Logger;
 import static org.embulk.spi.util.RetryExecutor.retryExecutor;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -222,7 +223,7 @@ public class AzureBlobStorageFileOutputPlugin
                                 {
                                     CloudBlockBlob blob = container.getBlockBlobReference(filePath);
                                     log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
-                                    blob.upload(new FileInputStream(file), file.length());
+                                    blob.upload(new BufferedInputStream(new FileInputStream(file)), file.length());
                                     log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
                                     log.info("Delete completed local file {}", file.getAbsolutePath());
                                     if (!file.delete()) {
