@@ -122,37 +122,33 @@ public class AzureBlobStorageFileOutputPlugin
     public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex)
     {
         final PluginTask task = taskSource.loadTask(PluginTask.class);
-        return new AzureFileOutput(task, taskIndex);
+        CloudBlobClient client = newAzureClient(task.getAccountName(), task.getAccountKey());
+        return new AzureFileOutput(client, task, taskIndex);
     }
 
     public static class AzureFileOutput implements TransactionalFileOutput
     {
+        private final CloudBlobClient client;
+        private final String containerName;
         private final String pathPrefix;
         private final String sequenceFormat;
         private final String pathSuffix;
-        private final CloudBlobClient client;
         private final int maxConnectionRetry;
-        private CloudBlobContainer container = null;
         private BufferedOutputStream output = null;
         private int fileIndex;
         private File file;
         private String filePath;
         private int taskIndex;
 
-        public AzureFileOutput(PluginTask task, int taskIndex)
+        public AzureFileOutput(CloudBlobClient client, PluginTask task, int taskIndex)
         {
+            this.client = client;
+            this.containerName = task.getContainer();
             this.taskIndex = taskIndex;
             this.pathPrefix = task.getPathPrefix();
             this.sequenceFormat = task.getSequenceFormat();
             this.pathSuffix = task.getFileNameExtension();
-            this.client = newAzureClient(task.getAccountName(), task.getAccountKey());
             this.maxConnectionRetry = task.getMaxConnectionRetry();
-            try {
-                this.container = client.getContainerReference(task.getContainer());
-            }
-            catch (URISyntaxException | StorageException ex) {
-                Throwables.propagate(ex);
-            }
         }
 
         @Override
@@ -221,6 +217,7 @@ public class AzureBlobStorageFileOutputPlugin
                                 @Override
                                 public Void call() throws StorageException, URISyntaxException, IOException, RetryGiveupException
                                 {
+                                    CloudBlobContainer container = client.getContainerReference(containerName);
                                     CloudBlockBlob blob = container.getBlockBlobReference(filePath);
                                     log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
                                     blob.upload(new BufferedInputStream(new FileInputStream(file)), file.length());

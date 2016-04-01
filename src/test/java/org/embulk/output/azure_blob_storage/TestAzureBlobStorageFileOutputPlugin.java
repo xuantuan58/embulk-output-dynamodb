@@ -270,14 +270,9 @@ public class TestAzureBlobStorageFileOutputPlugin
         maxConnectionRetry.setAccessible(true);
         maxConnectionRetry.set(output, 1);
 
-        // set non-existing-container for Test
-        Method method = AzureBlobStorageFileOutputPlugin.class.getDeclaredMethod("newAzureClient", String.class, String.class);
-        method.setAccessible(true);
-        CloudBlobClient client = (CloudBlobClient) method.invoke(plugin, AZURE_ACCOUNT_NAME, AZURE_ACCOUNT_KEY);
-
-        Field container = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("container");
+        Field container = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("containerName");
         container.setAccessible(true);
-        container.set(output, client.getContainerReference("non-exists-container"));
+        container.set(output, "non-existing-container");
         output.finish();
     }
 
