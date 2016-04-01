@@ -241,8 +241,7 @@ public class AzureBlobStorageFileOutputPlugin
                                 public void onRetry(Exception exception, int retryCount, int retryLimit, int retryWait)
                                         throws RetryGiveupException
                                 {
-                                    Class clazz = exception.getClass();
-                                    if (clazz.equals(FileNotFoundException.class) || clazz.equals(URISyntaxException.class) || clazz.equals(ConfigException.class)) {
+                                    if (exception instanceof  FileNotFoundException || exception instanceof URISyntaxException || exception instanceof ConfigException) {
                                         throw new RetryGiveupException(exception);
                                     }
                                     String message = String.format("Azure Blob Storage put request failed. Retrying %d/%d after %d seconds. Message: %s",
