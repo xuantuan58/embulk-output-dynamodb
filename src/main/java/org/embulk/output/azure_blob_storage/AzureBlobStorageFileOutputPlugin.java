@@ -60,7 +60,7 @@ public class AzureBlobStorageFileOutputPlugin
         String getSequenceFormat();
 
         @Config("max_connection_retry")
-        @ConfigDefault("10") // 5 times retry to connect sftp server if failed.
+        @ConfigDefault("10") // 10 times retry to connect Azure Blob Storage if failed.
         int getMaxConnectionRetry();
     }
 
@@ -77,7 +77,7 @@ public class AzureBlobStorageFileOutputPlugin
             String containerName = task.getContainer();
             CloudBlobContainer container = blobClient.getContainerReference(containerName);
             if (!container.exists()) {
-                log.info("container {} doesn't exists and created.", containerName);
+                log.info("container {} doesn't exist and is created.", containerName);
                 container.createIfNotExists();
             }
         }
