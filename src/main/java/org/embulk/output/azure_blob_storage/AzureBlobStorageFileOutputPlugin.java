@@ -82,7 +82,7 @@ public class AzureBlobStorageFileOutputPlugin
                 container.createIfNotExists();
             }
         }
-        catch (StorageException | URISyntaxException | ConfigException ex) {
+        catch (StorageException | URISyntaxException ex) {
             throw new ConfigException(ex);
         }
 
