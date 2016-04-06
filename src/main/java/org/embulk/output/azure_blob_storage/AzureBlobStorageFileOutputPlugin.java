@@ -23,6 +23,7 @@ import org.embulk.spi.util.RetryExecutor.Retryable;
 import org.slf4j.Logger;
 import static org.embulk.spi.util.RetryExecutor.retryExecutor;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -60,7 +61,7 @@ public class AzureBlobStorageFileOutputPlugin
         String getSequenceFormat();
 
         @Config("max_connection_retry")
-        @ConfigDefault("10") // 5 times retry to connect sftp server if failed.
+        @ConfigDefault("10") // 10 times retry to connect Azure Blob Storage if failed.
         int getMaxConnectionRetry();
     }
 
@@ -77,12 +78,12 @@ public class AzureBlobStorageFileOutputPlugin
             String containerName = task.getContainer();
             CloudBlobContainer container = blobClient.getContainerReference(containerName);
             if (!container.exists()) {
-                log.info("container {} doesn't exists and created.", containerName);
+                log.info("container {} doesn't exist and is created.", containerName);
                 container.createIfNotExists();
             }
         }
-        catch (StorageException | URISyntaxException | ConfigException ex) {
-            Throwables.propagate(ex);
+        catch (StorageException | URISyntaxException ex) {
+            throw new ConfigException(ex);
         }
 
         return resume(task.dump(), taskCount, control);
@@ -121,37 +122,33 @@ public class AzureBlobStorageFileOutputPlugin
     public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex)
     {
         final PluginTask task = taskSource.loadTask(PluginTask.class);
-        return new AzureFileOutput(task, taskIndex);
+        CloudBlobClient client = newAzureClient(task.getAccountName(), task.getAccountKey());
+        return new AzureFileOutput(client, task, taskIndex);
     }
 
     public static class AzureFileOutput implements TransactionalFileOutput
     {
+        private final CloudBlobClient client;
+        private final String containerName;
         private final String pathPrefix;
         private final String sequenceFormat;
         private final String pathSuffix;
-        private final CloudBlobClient client;
         private final int maxConnectionRetry;
-        private CloudBlobContainer container = null;
         private BufferedOutputStream output = null;
         private int fileIndex;
         private File file;
         private String filePath;
         private int taskIndex;
 
-        public AzureFileOutput(PluginTask task, int taskIndex)
+        public AzureFileOutput(CloudBlobClient client, PluginTask task, int taskIndex)
         {
+            this.client = client;
+            this.containerName = task.getContainer();
             this.taskIndex = taskIndex;
             this.pathPrefix = task.getPathPrefix();
             this.sequenceFormat = task.getSequenceFormat();
             this.pathSuffix = task.getFileNameExtension();
-            this.client = newAzureClient(task.getAccountName(), task.getAccountKey());
             this.maxConnectionRetry = task.getMaxConnectionRetry();
-            try {
-                this.container = client.getContainerReference(task.getContainer());
-            }
-            catch (URISyntaxException | StorageException ex) {
-                Throwables.propagate(ex);
-            }
         }
 
         @Override
@@ -220,9 +217,10 @@ public class AzureBlobStorageFileOutputPlugin
                                 @Override
                                 public Void call() throws StorageException, URISyntaxException, IOException, RetryGiveupException
                                 {
+                                    CloudBlobContainer container = client.getContainerReference(containerName);
                                     CloudBlockBlob blob = container.getBlockBlobReference(filePath);
                                     log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
-                                    blob.upload(new FileInputStream(file), file.length());
+                                    blob.upload(new BufferedInputStream(new FileInputStream(file)), file.length());
                                     log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
                                     log.info("Delete completed local file {}", file.getAbsolutePath());
                                     if (!file.delete()) {
@@ -241,8 +239,7 @@ public class AzureBlobStorageFileOutputPlugin
                                 public void onRetry(Exception exception, int retryCount, int retryLimit, int retryWait)
                                         throws RetryGiveupException
                                 {
-                                    Class clazz = exception.getClass();
-                                    if (clazz.equals(FileNotFoundException.class) || clazz.equals(URISyntaxException.class) || clazz.equals(ConfigException.class)) {
+                                    if (exception instanceof  FileNotFoundException || exception instanceof URISyntaxException || exception instanceof ConfigException) {
                                         throw new RetryGiveupException(exception);
                                     }
                                     String message = String.format("Azure Blob Storage put request failed. Retrying %d/%d after %d seconds. Message: %s",
