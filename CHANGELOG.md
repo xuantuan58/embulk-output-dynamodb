@@ -1,14 +1,19 @@
-## 0.1.4 - 2015-03-20
+## 0.1.5 - 2016-04-06
+
+* [maintenance] Refactoring codes [#8](https://github.com/sakama/embulk-output-azure_blob_storage/pull/8)
+
+
+## 0.1.4 - 2016-03-20
 
 * [maintenance] Use RetryExecutor when retry is needed [#7](https://github.com/sakama/embulk-output-azure_blob_storage/pull/7)
 
-## 0.1.3 - 2015-03-15
+## 0.1.3 - 2016-03-15
 
 * [maintenance] Add retry logic using expotential backoff [#6](https://github.com/sakama/embulk-output-azure_blob_storage/pull/6)
 * [maintenance] Change local file output path to temporary directory
 [#5](https://github.com/sakama/embulk-output-azure_blob_storage/pull/5)
 
-## 0.1.2 - 2015-02-02
+## 0.1.2 - 2016-02-02
 
 * [maintenance] Upgrade embulk version to v0.8.2 [#3](https://github.com/sakama/embulk-output-azure_blob_storage/pull/3)
 
