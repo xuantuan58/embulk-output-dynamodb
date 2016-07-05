@@ -129,7 +129,8 @@ public class TestAzureBlobStorageFileOutputPlugin
     @Test
     public void testTransactionCreateNonexistsContainer() throws Exception
     {
-        String container = "non-exists-container";
+        // Azure Container can't be created 30 seconds after deletion.
+        String container = "non-exists-container-" + System.currentTimeMillis();
         deleteContainerIfExists(container);
 
         assertEquals(false, isExistsContainer(container));

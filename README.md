@@ -1,4 +1,5 @@
 # Azure Blob Storage file output plugin for Embulk
+[![Build Status](https://travis-ci.org/embulk/embulk-output-azure_blob_storage.svg?branch=master)](https://travis-ci.org/embulk/embulk-output-azure_blob_storage)
 
 [Embulk](http://www.embulk.org/) file output plugin stores files on [Microsoft Azure](https://azure.microsoft.com/) [Blob Storage](https://azure.microsoft.com/en-us/documentation/articles/storage-introduction/#blob-storage)
 

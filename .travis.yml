@@ -1,5 +1,17 @@
 language: java
+
 jdk:
-- oraclejdk7
+  - oraclejdk8
+  - oraclejdk7
+  - openjdk7
+
+env:
+  global:
+    - AZURE_ACCOUNT_NAME=sakamatest
+    - AZURE_CONTAINER=blobcontainers
+    - AZURE_CONTAINER_DIRECTORY=unittests
+    - secure: "Fi2RdoSEHzTieSs3+Bw6pJ/K3nM3Hwnhdd9qQaXbhVEjTh9ZQ7lEzJj8eJqbItH1Fwh7AlFnZoF587rtHGXRPRjLANSvisiBBXQrPx6knGUq0iK/i0PEia2X3Ki1M6mNLuDzcDex7gWwjDXBVIFW43mM8TJkR/awuJHG/8/Xj7iplxKB6B1lwDVjIdAoMwTeauy3Jcnpute4FwwizxWPqHlPlsRJBEDbyBLsxOVePXT6pxS6o8TJEGN9gP5LVdh62v+9X4cB9+VsQv2imP932wj9UONQBqdjn0kwuvtVEOwCqtGOFVDDxXGozNwz0PWd6FphUB1UNWMg+PrWnvnXnTVC5P+y9YlE/bTnF8aKkRAn4WcRZXQ/vVnLZibisuKCmHV/kswVmMXX+FazYrxUMZmfsyDlPEVsE/l3Bjfhvq9lxAQUjhc17aKDBhrwSs5ZSWlWgBzL0IYumky8S9os+hnZYINXLD7q7QqqBIA7QozCim2S2dPlWDzIBVVY8mQ6zqkr3y4iA/fKPvL7ugwU4l35y+6FcC5TRRN8+RjuCnVrCqU+bBqpHtu8cqVefYeIwaIInRsFCE0fXCA9xO3AfFiB0KDStp3SNi6gYn+IlBcRXqbeQPx/2AtmtTjpf4grT4xJ0YVArF2Fd6Ecl3ZkJ7gZeERGNzwq8hyeLEyYPtE="
+
 script:
-- ./gradlew --info check jacocoTestReport
+  - ./gradlew gem
+  - ./gradlew --info check jacocoTestReport
