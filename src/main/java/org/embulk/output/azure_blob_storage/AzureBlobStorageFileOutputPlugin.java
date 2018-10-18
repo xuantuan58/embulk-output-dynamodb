@@ -225,7 +225,6 @@ public class AzureBlobStorageFileOutputPlugin
                                     if (file.exists() && !file.delete()) {
                                         log.warn("Couldn't delete local file " + file.getAbsolutePath());
                                     }
-                                    log.info("Delete completed local file {}", file.getAbsolutePath());
                                     return null;
                                 }
 
