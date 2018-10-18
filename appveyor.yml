@@ -17,6 +17,7 @@ environment:
   AZURE_ACCOUNT_NAME: sakamatest
   AZURE_CONTAINER: blobcontainers
   AZURE_CONTAINER_DIRECTORY: unittests_appveyor
+  # Encrypted value created on AppVeyor console https://ci.appveyor.com/tools/encrypt
   AZURE_ACCOUNT_KEY:
     secure: jrgzEWXOp3+c6r1clT8fRH9ck/aIdnBdVpqQWAwEH/t6w6mGzvBxIt2p0O7dMOowntuIEQBZZ3sIZXT1WzcgGLr11lShl73Y5c93NZJ9oZ7NK1vT4FXaWkRdT4jnAeIn
 
