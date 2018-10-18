@@ -162,7 +162,7 @@ public class AzureBlobStorageFileOutputPlugin
                     suffix = "." + suffix;
                 }
                 filePath = pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
-                file = File.createTempFile(filePath, ".tmp");
+                file = Exec.getTempFileSpace().createTempFile(filePath, ".tmp");
                 log.info("Writing local file {}", file.getAbsolutePath());
                 output = new BufferedOutputStream(new FileOutputStream(file));
             }
@@ -222,9 +222,8 @@ public class AzureBlobStorageFileOutputPlugin
                                     log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
                                     blob.upload(new BufferedInputStream(new FileInputStream(file)), file.length());
                                     log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
-                                    log.info("Delete completed local file {}", file.getAbsolutePath());
-                                    if (!file.delete()) {
-                                        throw new ConfigException("Couldn't delete local file " + file.getAbsolutePath());
+                                    if (file.exists() && !file.delete()) {
+                                        log.warn("Couldn't delete local file " + file.getAbsolutePath());
                                     }
                                     return null;
                                 }
