@@ -1,3 +1,6 @@
+## 0.1.6 - 2018-10-18
+* [maintenance]  Fix bug that happens while deleting temporary files on Windows [#12](https://github.com/sakama/embulk-output-azure_blob_storage/pull/12)
+
 ## 0.1.5 - 2016-04-06
 
 * [maintenance] Refactoring codes [#8](https://github.com/sakama/embulk-output-azure_blob_storage/pull/8)
