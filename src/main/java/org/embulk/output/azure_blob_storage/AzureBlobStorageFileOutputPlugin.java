@@ -162,7 +162,7 @@ public class AzureBlobStorageFileOutputPlugin
                     suffix = "." + suffix;
                 }
                 filePath = pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
-                file = Exec.getTempFileSpace().createTempFile(filePath, ".tmp");
+                file = Exec.getTempFileSpace().createTempFile(filePath, "tmp");
                 log.info("Writing local file {}", file.getAbsolutePath());
                 output = new BufferedOutputStream(new FileOutputStream(file));
             }
