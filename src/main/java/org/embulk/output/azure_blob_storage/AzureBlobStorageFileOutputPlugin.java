@@ -220,10 +220,14 @@ public class AzureBlobStorageFileOutputPlugin
                                     CloudBlobContainer container = client.getContainerReference(containerName);
                                     CloudBlockBlob blob = container.getBlockBlobReference(filePath);
                                     log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
-                                    blob.upload(new BufferedInputStream(new FileInputStream(file)), file.length());
-                                    log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
-                                    if (file.exists() && !file.delete()) {
-                                        log.warn("Couldn't delete local file " + file.getAbsolutePath());
+                                    try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
+                                        blob.upload(in, file.length());
+                                        log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
+                                    }
+                                    if (file.exists()) {
+                                        if (!file.delete()) {
+                                            log.warn("Couldn't delete local file " + file.getAbsolutePath());
+                                        }
                                     }
                                     return null;
                                 }
