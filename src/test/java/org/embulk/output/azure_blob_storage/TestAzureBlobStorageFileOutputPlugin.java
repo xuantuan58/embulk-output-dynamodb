@@ -19,7 +19,6 @@ import org.embulk.spi.FileOutputPlugin;
 import org.embulk.spi.FileOutputRunner;
 import org.embulk.spi.OutputPlugin;
 import org.embulk.spi.Schema;
-import org.embulk.spi.TransactionalFileOutput;
 import org.embulk.standards.CsvParserPlugin;
 
 import org.junit.Before;
@@ -27,6 +26,7 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
 import java.io.BufferedReader;
@@ -203,7 +203,7 @@ public class TestAzureBlobStorageFileOutputPlugin
         Schema schema = configSource.getNested("parser").loadConfig(CsvParserPlugin.PluginTask.class).getSchemaConfig().toSchema();
         runner.transaction(configSource, schema, 0, new Control());
 
-        TransactionalFileOutput output = plugin.open(task.dump(), 0);
+        AzureBlobStorageFileOutputPlugin.AzureFileOutput output = (AzureBlobStorageFileOutputPlugin.AzureFileOutput) plugin.open(task.dump(), 0);
 
         output.nextFile();
 
@@ -217,6 +217,7 @@ public class TestAzureBlobStorageFileOutputPlugin
 
         String remotePath = AZURE_PATH_PREFIX + String.format(task.getSequenceFormat(), 0, 0) + task.getFileNameExtension();
         assertRecords(remotePath);
+        assertTrue(!output.isTempFileExist());
     }
 
     @Test
@@ -227,7 +228,7 @@ public class TestAzureBlobStorageFileOutputPlugin
         Schema schema = configSource.getNested("parser").loadConfig(CsvParserPlugin.PluginTask.class).getSchemaConfig().toSchema();
         runner.transaction(configSource, schema, 0, new Control());
 
-        TransactionalFileOutput output = plugin.open(task.dump(), 0);
+        AzureBlobStorageFileOutputPlugin.AzureFileOutput output = (AzureBlobStorageFileOutputPlugin.AzureFileOutput) plugin.open(task.dump(), 0);
 
         output.nextFile();
 
@@ -246,10 +247,11 @@ public class TestAzureBlobStorageFileOutputPlugin
         }
         catch (Exception ex) {
             assertEquals(FileNotFoundException.class, ex.getCause().getClass());
+            assertTrue(!output.isTempFileExist());
         }
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testAzureFileOutputByOpenWithRetry() throws Exception
     {
         ConfigSource configSource = config();
@@ -257,7 +259,7 @@ public class TestAzureBlobStorageFileOutputPlugin
         Schema schema = configSource.getNested("parser").loadConfig(CsvParserPlugin.PluginTask.class).getSchemaConfig().toSchema();
         runner.transaction(configSource, schema, 0, new Control());
 
-        TransactionalFileOutput output = plugin.open(task.dump(), 0);
+        AzureBlobStorageFileOutputPlugin.AzureFileOutput output = (AzureBlobStorageFileOutputPlugin.AzureFileOutput) plugin.open(task.dump(), 0);
 
         output.nextFile();
 
@@ -274,7 +276,12 @@ public class TestAzureBlobStorageFileOutputPlugin
         Field container = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("containerName");
         container.setAccessible(true);
         container.set(output, "non-existing-container");
-        output.finish();
+        try {
+            output.finish();
+        }
+        catch (RuntimeException e) {
+            assertTrue(!output.isTempFileExist());
+        }
     }
 
     public ConfigSource config()

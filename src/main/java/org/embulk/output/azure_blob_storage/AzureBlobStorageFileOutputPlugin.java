@@ -1,5 +1,6 @@
 package org.embulk.output.azure_blob_storage;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.StorageException;
@@ -224,11 +225,6 @@ public class AzureBlobStorageFileOutputPlugin
                                         blob.upload(in, file.length());
                                         log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
                                     }
-                                    if (file.exists()) {
-                                        if (!file.delete()) {
-                                            log.warn("Couldn't delete local file " + file.getAbsolutePath());
-                                        }
-                                    }
                                     return null;
                                 }
 
@@ -268,6 +264,13 @@ public class AzureBlobStorageFileOutputPlugin
                 catch (InterruptedException ex) {
                     throw Throwables.propagate(ex);
                 }
+                finally {
+                    if (file.exists()) {
+                        if (!file.delete()) {
+                            log.warn("Couldn't delete local file " + file.getAbsolutePath());
+                        }
+                    }
+                }
             }
             return null;
         }
@@ -285,6 +288,12 @@ public class AzureBlobStorageFileOutputPlugin
         public TaskReport commit()
         {
             return Exec.newTaskReport();
+        }
+
+        @VisibleForTesting
+        public boolean isTempFileExist()
+        {
+            return file.exists();
         }
     }
 }
