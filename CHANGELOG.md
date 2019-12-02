@@ -1,3 +1,6 @@
+## 0.1.8 - 2018-12-04
+* [maintenance] Always delete temporary file [#15](https://github.com/embulk/embulk-output-azure_blob_storage/pull/15)
+
 ## 0.1.7 - 2018-10-19
 * [maintenance] Close BufferedInputStream before delete temporary file [#14](https://github.com/sakama/embulk-output-azure_blob_storage/pull/14)
 
