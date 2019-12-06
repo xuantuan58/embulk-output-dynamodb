@@ -239,7 +239,7 @@ public class TestAzureBlobStorageFileOutputPlugin
 
         Field field = AzureBlobStorageFileOutputPlugin.AzureFileOutput.class.getDeclaredField("file");
         field.setAccessible(true);
-        File file = File.createTempFile("non-readable-file", ".tmp");
+        File file = Exec.getTempFileSpace().createTempFile();
         file.setReadable(false);
         field.set(output, file);
         try {
