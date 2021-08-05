@@ -1,9 +1,10 @@
 package org.embulk.output.azure_blob_storage;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.BlockEntry;
+import com.microsoft.azure.storage.blob.BlockSearchMode;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
@@ -16,13 +17,13 @@ import org.embulk.config.Task;
 import org.embulk.config.TaskReport;
 import org.embulk.config.TaskSource;
 import org.embulk.spi.Buffer;
+import org.embulk.spi.DataException;
 import org.embulk.spi.Exec;
 import org.embulk.spi.FileOutputPlugin;
 import org.embulk.spi.TransactionalFileOutput;
 import org.embulk.spi.util.RetryExecutor.RetryGiveupException;
 import org.embulk.spi.util.RetryExecutor.Retryable;
 import org.slf4j.Logger;
-import static org.embulk.spi.util.RetryExecutor.retryExecutor;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -30,11 +31,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.security.InvalidKeyException;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+
+import static org.embulk.spi.util.RetryExecutor.retryExecutor;
 
 public class AzureBlobStorageFileOutputPlugin
         implements FileOutputPlugin
@@ -123,65 +127,99 @@ public class AzureBlobStorageFileOutputPlugin
     public TransactionalFileOutput open(TaskSource taskSource, final int taskIndex)
     {
         final PluginTask task = taskSource.loadTask(PluginTask.class);
-        CloudBlobClient client = newAzureClient(task.getAccountName(), task.getAccountKey());
-        return new AzureFileOutput(client, task, taskIndex);
+        try {
+            CloudBlobClient blobClient = newAzureClient(task.getAccountName(), task.getAccountKey());
+            CloudBlobContainer container = blobClient.getContainerReference(task.getContainer());
+
+            return new AzureFileOutput(container, task, taskIndex);
+        }
+        catch (Exception e) {
+            throw new DataException(e);
+        }
     }
 
     public static class AzureFileOutput implements TransactionalFileOutput
     {
-        private final CloudBlobClient client;
-        private final String containerName;
+        private final int blockSize;
+        private final CloudBlobContainer container;
         private final String pathPrefix;
         private final String sequenceFormat;
         private final String pathSuffix;
         private final int maxConnectionRetry;
         private BufferedOutputStream output = null;
+        private CloudBlockBlob blockBlob;
         private int fileIndex;
+        private final int taskIndex;
         private File file;
-        private String filePath;
-        private int taskIndex;
+        private int blockIndex = 0;
+        private final List<BlockEntry> blocks = new ArrayList<>();
 
-        public AzureFileOutput(CloudBlobClient client, PluginTask task, int taskIndex)
+        public AzureFileOutput(CloudBlobContainer container, PluginTask task, int taskIndex)
         {
-            this.client = client;
-            this.containerName = task.getContainer();
+            this.container = container;
             this.taskIndex = taskIndex;
             this.pathPrefix = task.getPathPrefix();
             this.sequenceFormat = task.getSequenceFormat();
             this.pathSuffix = task.getFileNameExtension();
             this.maxConnectionRetry = task.getMaxConnectionRetry();
+            // ~ 90M. init here for unit test changes it
+            this.blockSize = 90 * 1024 * 1024;
         }
 
         @Override
         public void nextFile()
         {
-            closeFile();
+            // close and commit current file
+            closeCurrentFile();
+            commitCurrentBlock();
 
+            // prepare for next new file
+            newTempFile();
+            newBlockBlob();
+            fileIndex++;
+        }
+
+        private void newBlockBlob()
+        {
             try {
-                String suffix = pathSuffix;
-                if (!suffix.startsWith(".")) {
-                    suffix = "." + suffix;
-                }
-                filePath = pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
-                file = Exec.getTempFileSpace().createTempFile();
-                log.info("Writing local file {}", file.getAbsolutePath());
-                output = new BufferedOutputStream(new FileOutputStream(file));
+                blockBlob = container.getBlockBlobReference(newBlobName());
+                blockIndex = 0;
+                blocks.clear();
             }
-            catch (IOException ex) {
-                throw Throwables.propagate(ex);
+            catch (Exception e) {
+                throw new DataException(e);
             }
         }
 
-        private void closeFile()
+        private String newBlobName()
+        {
+            String suffix = pathSuffix;
+            if (!suffix.startsWith(".")) {
+                suffix = "." + suffix;
+            }
+            return pathPrefix + String.format(sequenceFormat, taskIndex, fileIndex) + suffix;
+        }
+
+        private void closeCurrentFile()
         {
             if (output != null) {
                 try {
                     output.close();
-                    fileIndex++;
                 }
                 catch (IOException ex) {
-                    throw Throwables.propagate(ex);
+                    throw new RuntimeException(ex);
                 }
+            }
+        }
+
+        private void newTempFile()
+        {
+            try {
+                file = Exec.getTempFileSpace().createTempFile();
+                output = new BufferedOutputStream(new FileOutputStream(file));
+            }
+            catch (IOException ex) {
+                throw new RuntimeException(ex);
             }
         }
 
@@ -190,9 +228,16 @@ public class AzureBlobStorageFileOutputPlugin
         {
             try {
                 output.write(buffer.array(), buffer.offset(), buffer.limit());
+
+                // upload this block if the size reaches limit (data still in the buffer)
+                if (file.length() > blockSize) {
+                    closeCurrentFile();
+                    uploadFile();
+                    newTempFile();
+                }
             }
             catch (IOException ex) {
-                throw Throwables.propagate(ex);
+                throw new RuntimeException(ex);
             }
             finally {
                 buffer.release();
@@ -202,83 +247,97 @@ public class AzureBlobStorageFileOutputPlugin
         @Override
         public void finish()
         {
-            close();
+            closeCurrentFile();
             uploadFile();
+            commitCurrentBlock();
+        }
+
+        private void commitCurrentBlock()
+        {
+            // commit blob
+            if (!blocks.isEmpty()) {
+                try {
+                    blockBlob.commitBlockList(blocks);
+                    blocks.clear();
+                }
+                catch (StorageException e) {
+                    throw new DataException(e);
+                }
+            }
         }
 
         private Void uploadFile()
         {
-            if (filePath != null) {
-                try {
-                    return retryExecutor()
-                            .withRetryLimit(maxConnectionRetry)
-                            .withInitialRetryWait(500)
-                            .withMaxRetryWait(30 * 1000)
-                            .runInterruptible(new Retryable<Void>() {
-                                @Override
-                                public Void call() throws StorageException, URISyntaxException, IOException, RetryGiveupException
-                                {
-                                    CloudBlobContainer container = client.getContainerReference(containerName);
-                                    CloudBlockBlob blob = container.getBlockBlobReference(filePath);
-                                    log.info("Upload start {} to {}", file.getAbsolutePath(), filePath);
-                                    try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
-                                        blob.upload(in, file.length());
-                                        log.info("Upload completed {} to {}", file.getAbsolutePath(), filePath);
-                                    }
-                                    return null;
-                                }
+            if (file.length() == 0) {
+                log.warn("Skipped empty block {}", file.getName());
+                return null;
+            }
 
-                                @Override
-                                public boolean isRetryableException(Exception exception)
-                                {
-                                    return true;
-                                }
+            try {
+                return retryExecutor()
+                        .withRetryLimit(maxConnectionRetry)
+                        .withInitialRetryWait(500)
+                        .withMaxRetryWait(30 * 1000)
+                        .runInterruptible(new Retryable<Void>() {
+                            @Override
+                            public Void call() throws IOException, StorageException
+                            {
+                                String blockId = Base64.getEncoder().encodeToString(String.format("%10d", blockIndex).getBytes());
+                                blockBlob.uploadBlock(blockId, new BufferedInputStream(new FileInputStream(file)), file.length());
+                                blocks.add(new BlockEntry(blockId, BlockSearchMode.UNCOMMITTED));
+                                log.info("Uploaded block file: {}, id: {}, size ~ {}kb", file.getName(), blockId, file.length() / 1024);
+                                blockIndex++;
+                                return null;
+                            }
 
-                                @Override
-                                public void onRetry(Exception exception, int retryCount, int retryLimit, int retryWait)
-                                        throws RetryGiveupException
-                                {
-                                    if (exception instanceof  FileNotFoundException || exception instanceof URISyntaxException || exception instanceof ConfigException) {
-                                        throw new RetryGiveupException(exception);
-                                    }
-                                    String message = String.format("Azure Blob Storage put request failed. Retrying %d/%d after %d seconds. Message: %s",
-                                            retryCount, retryLimit, retryWait / 1000, exception.getMessage());
-                                    if (retryCount % 3 == 0) {
-                                        log.warn(message, exception);
-                                    }
-                                    else {
-                                        log.warn(message);
-                                    }
-                                }
+                            @Override
+                            public boolean isRetryableException(Exception exception)
+                            {
+                                return true;
+                            }
 
-                                @Override
-                                public void onGiveup(Exception firstException, Exception lastException)
-                                        throws RetryGiveupException
-                                {
+                            @Override
+                            public void onRetry(Exception exception, int retryCount, int retryLimit, int retryWait)
+                                    throws RetryGiveupException
+                            {
+                                if (exception instanceof  FileNotFoundException || exception instanceof URISyntaxException || exception instanceof ConfigException) {
+                                    throw new RetryGiveupException(exception);
                                 }
-                            });
-                }
-                catch (RetryGiveupException ex) {
-                    throw Throwables.propagate(ex.getCause());
-                }
-                catch (InterruptedException ex) {
-                    throw Throwables.propagate(ex);
-                }
-                finally {
-                    if (file.exists()) {
-                        if (!file.delete()) {
-                            log.warn("Couldn't delete local file " + file.getAbsolutePath());
-                        }
+                                String message = String.format("Azure Blob Storage put request failed. Retrying %d/%d after %d seconds. Message: %s",
+                                        retryCount, retryLimit, retryWait / 1000, exception.getMessage());
+                                if (retryCount % 3 == 0) {
+                                    log.warn(message, exception);
+                                }
+                                else {
+                                    log.warn(message);
+                                }
+                            }
+
+                            @Override
+                            public void onGiveup(Exception firstException, Exception lastException)
+                            {
+                            }
+                        });
+            }
+            catch (RetryGiveupException ex) {
+                throw new RuntimeException(ex.getCause());
+            }
+            catch (InterruptedException ex) {
+                throw new RuntimeException(ex);
+            }
+            finally {
+                if (file.exists()) {
+                    if (!file.delete()) {
+                        log.warn("Couldn't delete local file " + file.getAbsolutePath());
                     }
                 }
             }
-            return null;
         }
 
         @Override
         public void close()
         {
-            closeFile();
+            closeCurrentFile();
         }
 
         @Override
